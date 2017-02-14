@@ -3609,7 +3609,7 @@ class BaseEC2NodeDriver(NodeDriver):
         return self._get_boolean(response)
 
     
-    def ex_import_snapshot(self, client_data=None,client_token=None,description=None,disk_container=None, dry_run='true',role_name=None):
+    def ex_import_snapshot(self, client_data=None,client_token=None,description=None,disk_container=None, dry_run=None,role_name=None):
         """
         Imports a disk into an EBS snapshot. More information can be found
         at https://goo.gl/sbXkYA.
@@ -3654,14 +3654,13 @@ class BaseEC2NodeDriver(NodeDriver):
             params['Description'] = description
 
         if disk_container is not None:
-            #params.update(self._get_disk_container_params(disk_container))
-            params['DiskContainer'] = disk_container
+            params.update(self._get_disk_container_params(disk_container))
+            #params['DiskContainer'] = disk_container
         if dry_run is not None:
             params['DryRun'] = dry_run
 
         if role_name is not None:
             params['RoleName'] = role_name
-        print params
 
         obj = self.connection.request(self.path, params=params).object
 
@@ -6458,11 +6457,11 @@ class BaseEC2NodeDriver(NodeDriver):
 
             for k, v in content.items():
                 if not isinstance(v, dict):
-                    params['DiskContainer.%d.%s' % (idx, k)] = str(v)
+                    params['DiskContainer.%s' % (k)] = str(v)
                 else:                                                                              
                     for key, value in v.items():                                                       
-                        params['DiskContainer.%d.%s.%s'
-                               % (idx, k, key)] = str(value)
+                        params['DiskContainer.%s.%s'
+                               % (k, key)] = str(value)
         return params
 
     def _get_common_security_group_params(self, group_id, protocol,
