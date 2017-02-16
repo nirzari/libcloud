@@ -22,6 +22,7 @@ import sys
 import base64
 import copy
 import warnings
+import time
 
 try:
     from lxml import etree as ET
@@ -3638,6 +3639,7 @@ class BaseEC2NodeDriver(NodeDriver):
                           default role, 'vmimport'.(optional)
         :type   RoleName: ''str''
         
+        rtype: :class: 'VolumeSnapshot'
         """
 
         params = {'Action': 'ImportSnapshot', 'Version':'2016-11-15'}
@@ -3652,7 +3654,7 @@ class BaseEC2NodeDriver(NodeDriver):
 
         if description is not None:
             params['Description'] = description
-
+        
         if disk_container is not None:
             params.update(self._get_disk_container_params(disk_container))
             #params['DiskContainer'] = disk_container
@@ -3661,12 +3663,50 @@ class BaseEC2NodeDriver(NodeDriver):
 
         if role_name is not None:
             params['RoleName'] = role_name
+        
+        importSnapshot = self.connection.request(self.path, params=params).object
+        
+        importTaskId = findtext(element=importSnapshot,xpath='importTaskId', namespace=NAMESPACE)
+        res = self._wait_for_import_snapshot_completion(importTaskId)
+        
+        return res
 
-        obj = self.connection.request(self.path, params=params).object
+    def _wait_for_import_snapshot_completion(self,importTaskId):
+        """
+        It waits for import snapshot to be completed
 
-        return obj
+        :param ImportTaskId: Import task Id for the current ImportSnapshot Task
+        :type ImportTaskId: ''str''
+        
+        :rtype: :class:`VolumeSnapshot`
+        """
 
-    
+        timeout= 1800
+        start_time = time.time()
+        status = ""
+        while status != 'completed':
+            res = self.ex_describe_import_snapshot_task(importTaskId)
+            status = findtext(element=res, xpath='importSnapshotTaskSet/item/snapshotTaskDetail/status', namespace=NAMESPACE)
+            time.sleep(15)
+            if (time.time() - start_time >= timeout):
+                raise Exception("Timeout (%s sec) while waiting for import task Id %s."
+                                % importTaskId)    
+        return res
+
+    def ex_describe_import_snapshot_task(self,importTaskId):
+        """
+        :param ImportTaskId: Import task Id for the current ImportSnapshot Task
+        :type ImportTaskId: ''str''
+
+        :rtype: :class:`DescribeImportSnapshotTasks Object`
+
+        """
+        params = {'Action': 'DescribeImportSnapshotTasks','Version':'2016-11-15'}
+        params['ImportTaskId.1']= importTaskId
+        res = self.connection.request(self.path, params=params).object
+        
+        return res
+
     def ex_list_placement_groups(self, names=None):
         """
         List Placement Groups
