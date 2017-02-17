@@ -3610,7 +3610,9 @@ class BaseEC2NodeDriver(NodeDriver):
         return self._get_boolean(response)
 
     
-    def ex_import_snapshot(self, client_data=None,client_token=None,description=None,disk_container=None, dry_run=None,role_name=None):
+    def ex_import_snapshot(self, client_data=None,
+                           client_token=None,description=None,
+                           disk_container=None, dry_run=None,role_name=None):
         """
         Imports a disk into an EBS snapshot. More information can be found
         at https://goo.gl/sbXkYA.
@@ -3642,22 +3644,22 @@ class BaseEC2NodeDriver(NodeDriver):
         rtype: :class: 'VolumeSnapshot'
         """
 
-        params = {'Action': 'ImportSnapshot', 'Version':'2016-11-15'}
+        params = {'Action': 'ImportSnapshot'}
 
-        """
+        """     
         if client_data is not None:
-             params['ClientData'] = client_data
+            params.update(self._get_client_date_params(client_data))
         """
-        
+
         if client_token is not None:
-            params['ClientToken'] = client_token
+             params['ClientToken'] = client_token
 
         if description is not None:
             params['Description'] = description
         
         if disk_container is not None:
             params.update(self._get_disk_container_params(disk_container))
-            #params['DiskContainer'] = disk_container
+
         if dry_run is not None:
             params['DryRun'] = dry_run
 
@@ -3666,12 +3668,15 @@ class BaseEC2NodeDriver(NodeDriver):
         
         importSnapshot = self.connection.request(self.path, params=params).object
         
-        importTaskId = findtext(element=importSnapshot,xpath='importTaskId', namespace=NAMESPACE)
-        res = self._wait_for_import_snapshot_completion(importTaskId)
+        importTaskId = findtext(element=importSnapshot,xpath='importTaskId',
+                                namespace=NAMESPACE)
         
-        return res
+        volumeSnapshot = self._wait_for_import_snapshot_completion(importTaskId,
+                                                                   timeout=1800)
+        
+        return volumeSnapshot
 
-    def _wait_for_import_snapshot_completion(self,importTaskId):
+    def _wait_for_import_snapshot_completion(self,import_task_id,timeout):
         """
         It waits for import snapshot to be completed
 
@@ -3680,29 +3685,50 @@ class BaseEC2NodeDriver(NodeDriver):
         
         :rtype: :class:`VolumeSnapshot`
         """
-
-        timeout= 1800
         start_time = time.time()
         status = ""
         while status != 'completed':
-            res = self.ex_describe_import_snapshot_task(importTaskId)
-            status = findtext(element=res, xpath='importSnapshotTaskSet/item/snapshotTaskDetail/status', namespace=NAMESPACE)
+            res = self.ex_describe_import_snapshot_task(import_task_id)
+            status = findtext(element=res, xpath='importSnapshotTaskSet/item/'
+                              'snapshotTaskDetail/status', namespace=NAMESPACE)
             time.sleep(15)
+
             if (time.time() - start_time >= timeout):
                 raise Exception("Timeout (%s sec) while waiting for import task Id %s."
                                 % importTaskId)    
-        return res
+        
+        snapId = findtext(element=res,
+                          xpath='importSnapshotTaskSet/item/snapshotTaskDetail/snapshotId',
+                          namespace=NAMESPACE)
+        
+        volumeSnapshot = VolumeSnapshot(snapId,driver=self)
 
-    def ex_describe_import_snapshot_task(self,importTaskId):
+        return volumeSnapshot
+
+    def ex_describe_import_snapshot_task(self,import_task_id, dry_run=None):
         """
+        Describes your import snapshot tasks. More information can be found
+        at https://goo.gl/CI0MdS.
+
         :param ImportTaskId: Import task Id for the current ImportSnapshot Task
         :type ImportTaskId: ''str''
+
+        :param  DryRun: Checks whether you have the permission for
+                        the action, without actually making the request,
+                        and provides an error response.(optional)
+        :type   DryRun: ''bool''
 
         :rtype: :class:`DescribeImportSnapshotTasks Object`
 
         """
-        params = {'Action': 'DescribeImportSnapshotTasks','Version':'2016-11-15'}
-        params['ImportTaskId.1']= importTaskId
+        params = {'Action': 'DescribeImportSnapshotTasks'}
+
+        if dry_run is not None:
+            params['DryRun'] = dry_run
+
+        #This can be extended for multiple import snapshot tasks
+        params['ImportTaskId.1']= import_task_id
+
         res = self.connection.request(self.path, params=params).object
         
         return res
@@ -6474,12 +6500,12 @@ class BaseEC2NodeDriver(NodeDriver):
     def _get_disk_container_params(self, disk_container):
         """
         Return a list of dictionaries with query parameters for
-        a valid disk container
+        a valid disk container.
 
-        :param      mapping: List of dictionaries with the drive layout
-        :type       mapping: ``list`` or ``dict``
+        :param      disk_container: List of dictionaries with the drive layout
+        :type       disk_container: ``list`` or ``dict``
 
-        :return:    Dictionary representation of the drive mapping
+        :return:    Dictionary representation of the disk_container
         :rtype:     ``dict``
         """
 
@@ -6492,16 +6518,46 @@ class BaseEC2NodeDriver(NodeDriver):
             idx += 1  # We want 1-based indexes
             if not isinstance(content, dict):
                 raise AttributeError(
-                    'content %s in disk_container'                                           
-                    'not a dict' % vals)
+                    'content %s in disk_container'                                                              'not a dict' % vals)
 
             for k, v in content.items():
                 if not isinstance(v, dict):
                     params['DiskContainer.%s' % (k)] = str(v)
-                else:                                                                              
-                    for key, value in v.items():                                                       
+                
+                else:
+                    for key, value in v.items():
                         params['DiskContainer.%s.%s'
                                % (k, key)] = str(value)
+
+        return params
+
+    def _get_client_data_params(self,client_data):
+        """
+        Return a dictionary with query parameters for
+        a valid client data.
+
+        :param      client_data: List of dictionaries with the drive layout
+        :type       client_data: ``dict``
+
+        :return:    Dictionary representation of the client data
+        :rtype:     ``dict``
+        """
+
+        if not isinstance(client_data, (list, tuple)):
+            raise AttributeError('client_data not list or tuple')
+
+        params = {}
+
+        for idx, content in enumerate(client_data):
+            idx += 1  # We want 1-based indexes
+            if not isinstance(content, dict):
+                raise AttributeError(
+                    'content %s in client_data'                                           
+                    'not a dict' % vals)
+
+            for k, v in content.items():
+                params['ClientData.%s' % (k)] = str(v)
+        
         return params
 
     def _get_common_security_group_params(self, group_id, protocol,
