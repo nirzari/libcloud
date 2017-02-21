@@ -68,6 +68,7 @@ __all__ = [
     'EC2NodeLocation',
     'EC2ReservedNode',
     'EC2SecurityGroup',
+    'EC2ImportSnapshotTask',
     'EC2PlacementGroup',
     'EC2Network',
     'EC2NetworkSubnet',
@@ -2576,6 +2577,20 @@ class EC2SecurityGroup(object):
         return (('<EC2SecurityGroup: id=%s, name=%s')
                 % (self.id, self.name))
 
+class EC2ImportSnapshotTask(object):
+    """
+    Represents information about a describe_import_snapshot_task.
+
+    Note: This class is EC2 specific.
+    """
+
+    def __init__(self, status, snapshotId):
+        self.status = status
+        self.snapshotId = snapshotId
+
+    def __repr__(self):
+        return (('<EC2SecurityGroup: status=%s, snapshotId=%s')
+                % (self.status, self.snapshotId))
 
 class EC2PlacementGroup(object):
     """
@@ -3667,13 +3682,12 @@ class BaseEC2NodeDriver(NodeDriver):
             params['RoleName'] = role_name
         
         importSnapshot = self.connection.request(self.path, params=params).object
-        
+
         importTaskId = findtext(element=importSnapshot,xpath='importTaskId',
                                 namespace=NAMESPACE)
-        
+ 
         volumeSnapshot = self._wait_for_import_snapshot_completion(importTaskId,
                                                                    timeout=1800)
-        
         return volumeSnapshot
 
     def _wait_for_import_snapshot_completion(self,import_task_id,timeout):
@@ -3686,26 +3700,22 @@ class BaseEC2NodeDriver(NodeDriver):
         :rtype: :class:`VolumeSnapshot`
         """
         start_time = time.time()
-        status = ""
-        while status != 'completed':
-            res = self.ex_describe_import_snapshot_task(import_task_id)
-            status = findtext(element=res, xpath='importSnapshotTaskSet/item/'
-                              'snapshotTaskDetail/status', namespace=NAMESPACE)
-            time.sleep(15)
+        snapshotId = None
+        while snapshotId == None:
+            res = self.ex_describe_import_snapshot_tasks(import_task_id)
+            snapshotId = res.snapshotId
 
+            time.sleep(15)
             if (time.time() - start_time >= timeout):
-                raise Exception("Timeout (%s sec) while waiting for import task Id %s."
+                raise Exception('Timeout (%s sec) while waiting'
+                                'for import task Id %s.'
                                 % importTaskId)    
-        
-        snapId = findtext(element=res,
-                          xpath='importSnapshotTaskSet/item/snapshotTaskDetail/snapshotId',
-                          namespace=NAMESPACE)
-        
-        volumeSnapshot = VolumeSnapshot(snapId,driver=self)
+
+        volumeSnapshot = VolumeSnapshot(snapshotId,driver=self)
 
         return volumeSnapshot
 
-    def ex_describe_import_snapshot_task(self,import_task_id, dry_run=None):
+    def ex_describe_import_snapshot_tasks(self,import_task_id, dry_run=None):
         """
         Describes your import snapshot tasks. More information can be found
         at https://goo.gl/CI0MdS.
@@ -3728,9 +3738,11 @@ class BaseEC2NodeDriver(NodeDriver):
 
         #This can be extended for multiple import snapshot tasks
         params['ImportTaskId.1']= import_task_id
-
-        res = self.connection.request(self.path, params=params).object
         
+        res = self._to_import_snapshot_task(
+            self.connection.request(self.path, params=params).object
+        )
+
         return res
 
     def ex_list_placement_groups(self, names=None):
@@ -5840,6 +5852,18 @@ class BaseEC2NodeDriver(NodeDriver):
                               created=created,
                               state=state,
                               name=name)
+
+    def _to_import_snapshot_task(self, element, name=None):
+        status = findtext(element=element, xpath='importSnapshotTaskSet/item/'
+                              'snapshotTaskDetail/status', namespace=NAMESPACE)
+        
+        if status != 'completed':
+            snapshotId = None
+        else:
+            xpath = 'importSnapshotTaskSet/item/snapshotTaskDetail/snapshotId'
+            snapshotId = findtext(element=element,xpath=xpath,namespace=NAMESPACE)
+
+        return EC2ImportSnapshotTask(status,snapshotId=snapshotId)
 
     def _to_key_pairs(self, elems):
         key_pairs = [self._to_key_pair(elem=elem) for elem in elems]

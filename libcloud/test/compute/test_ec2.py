@@ -17,6 +17,7 @@ from __future__ import with_statement
 
 import os
 import sys
+import pdb
 from datetime import datetime
 from libcloud.utils.iso8601 import UTC
 
@@ -552,6 +553,7 @@ class EC2Tests(LibcloudTestCase, TestCaseMixin):
         self.assertTrue(resp)
 
     def ex_register_image(self):
+        pdb.set_trace()
         mapping = [{'DeviceName': '/dev/sda1',
                     'Ebs': {'SnapshotId': 'snap-5ade3e4e'}}]
         image = self.driver.ex_register_image(name='Test Image',
@@ -561,6 +563,26 @@ class EC2Tests(LibcloudTestCase, TestCaseMixin):
                                               block_device_mapping=mapping,
                                               ena_support=True)
         self.assertEqual(image.id, 'ami-57c2fb3e')
+
+    """
+    def test_ex_import_snapshot(self):
+        disk_container = [{'Description': 'amisstea-test2',
+                  'Format': 'raw',
+                  'UserBucket': {
+                    'S3Bucket': 'amisstea-test',
+                    'S3Key': 'rhel-server-ec2-7.3-6.x86_64.raw'
+                  }}]
+    
+        importSnapshot = self.driver.ex_import_snapshot(disk_container=disk_container)
+        
+        self.assertEqual(importSnapshot.importTaskId, 'import-snap-fgsddbhv')
+    
+    """
+    def test_ex_describe_import_snapshot_tasks(self):
+        res = self.driver.ex_describe_import_snapshot_tasks(
+                                    import_task_id='import-snap-fhdysyq6')
+        
+        self.assertEqual(res.snapshotId, 'snap-097908d536557004e')
 
     def test_ex_list_availability_zones(self):
         availability_zones = self.driver.ex_list_availability_zones()
@@ -1255,7 +1277,16 @@ class EC2MockHttp(MockHttpTestCase):
     def _RegisterImages(self, method, url, body, headers):
         body = self.fixtures.load('register_image.xml')
         return (httplib.OK, body, {}, httplib.responses[httplib.OK])
-
+    """
+    def _ImportSnapshot(self, method, url, body, headers):
+        body = self.fixtures.load('import_snapshot.xml')
+        return (httplib.OK, body, {}, httplib.responses[httplib.OK])
+    """
+    
+    def _DescribeImportSnapshotTasks(self, method, url, body, headers):
+        body = self.fixtures.load('describe_import_snapshot_tasks.xml')
+        return (httplib.OK, body, {}, httplib.responses[httplib.OK])
+    
     def _ex_imageids_DescribeImages(self, method, url, body, headers):
         body = self.fixtures.load('describe_images_ex_imageids.xml')
         return (httplib.OK, body, {}, httplib.responses[httplib.OK])

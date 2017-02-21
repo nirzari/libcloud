@@ -1,0 +1,11 @@
+<DescribeImportSnapshotTasksResponse xmlns="http://ec2.amazonaws.com/doc/2016-11-15/">
+    <requestId>d83d751f-ccaf-4655-a837-87694f6813bd</requestId>
+    <importSnapshotTaskSet>
+        <item>
+	    <snapshotTaskDetail>
+		<snapshotId>snap-097908d536557004e</snapshotId>
+		<status>completed</status>
+	    </snapshotTaskDetail>
+    	</item>
+    </importSnapshotTaskSet>
+</DescribeImportSnapshotTasksResponse>
