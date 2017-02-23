@@ -581,7 +581,7 @@ class EC2Tests(LibcloudTestCase, TestCaseMixin):
 
             res = self.driver.ex_import_snapshot(disk_container=disk_container)
             mock_wait.assert_called_once_with(
-                    'import-snap-fgsddbhv', timeout=1800)
+                    import_task_id='import-snap-fgsddbhv', timeout=1800, interval=15)
 
             self.assertEqual(res, mock_snapshot)
 
@@ -592,8 +592,19 @@ class EC2Tests(LibcloudTestCase, TestCaseMixin):
             mock_wait.return_value.snapshotId = 'snap-097908d536557004e'
             res = self.driver._wait_for_import_snapshot_completion(
                     import_task_id='import-snap-fhdysyq6')
-
             self.assertEqual(res.id, 'snap-097908d536557004e')
+
+    def test_timeout_wait_for_import_snapshot_completion(self):
+        import_task_id = 'import-snap-fhdysyq6'
+        with patch('libcloud.compute.drivers.ec2.BaseEC2NodeDriver'
+                   '.ex_describe_import_snapshot_tasks') as mock_wait:
+            with self.assertRaises(Exception) as context:
+                mock_wait.return_value.snapshotId = None
+                self.driver._wait_for_import_snapshot_completion(
+                    import_task_id=import_task_id, timeout=0.01, interval=0.001)
+            self.assertTrue('Timeout while waiting for '
+                            'import task Id %s'
+                            % import_task_id in context.exception)
 
     def test_ex_describe_import_snapshot_tasks(self):
         res = self.driver.ex_describe_import_snapshot_tasks(

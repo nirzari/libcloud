@@ -3690,13 +3690,14 @@ class BaseEC2NodeDriver(NodeDriver):
                                 namespace=NAMESPACE)
 
         volumeSnapshot = self._wait_for_import_snapshot_completion(
-                importTaskId, timeout=1800)
+                import_task_id=importTaskId, timeout=1800, interval=15)
 
         return volumeSnapshot
 
     def _wait_for_import_snapshot_completion(self,
-                                             import_task_id, timeout=1800):
-
+                                             import_task_id,
+                                             timeout=1800,
+                                             interval=15):
         """
         It waits for import snapshot to be completed
 
@@ -3709,17 +3710,16 @@ class BaseEC2NodeDriver(NodeDriver):
         snapshotId = None
         while snapshotId is None:
             if (time.time() - start_time >= timeout):
-                raise Exception('Timeout (%s sec) while waiting'
-                                'for import task Id %s.'
+                raise Exception('Timeout while waiting '
+                                'for import task Id %s'
                                 % import_task_id)
             res = self.ex_describe_import_snapshot_tasks(import_task_id)
             snapshotId = res.snapshotId
 
             if snapshotId is None:
-                time.sleep(15)
+                time.sleep(interval)
 
         volumeSnapshot = VolumeSnapshot(snapshotId, driver=self)
-
         return volumeSnapshot
 
     def ex_describe_import_snapshot_tasks(self, import_task_id, dry_run=None):
@@ -3749,7 +3749,6 @@ class BaseEC2NodeDriver(NodeDriver):
         res = self._to_import_snapshot_task(
             self.connection.request(self.path, params=params).object
         )
-
         return res
 
     def ex_list_placement_groups(self, names=None):
