@@ -19,7 +19,6 @@ import os
 import sys
 import pdb
 from datetime import datetime
-from mock import patch, Mock
 from libcloud.utils.iso8601 import UTC
 
 from libcloud.utils.py3 import httplib
@@ -566,52 +565,37 @@ class EC2Tests(LibcloudTestCase, TestCaseMixin):
         self.assertEqual(image.id, 'ami-57c2fb3e')
 
     def test_ex_import_snapshot(self):
-        with patch('libcloud.compute.drivers.ec2.BaseEC2NodeDriver._wait_for'
-                   '_import_snapshot_completion') as mock_wait:
-            mock_snapshot = Mock()
-            mock_snapshot.id = 'snap-097908d536557004e'
-            mock_wait.return_value = mock_snapshot
-            disk_container = [{
-                'Description': 'amisstea-test2',
-                'Format': 'raw',
-                'UserBucket': {
-                    'S3Bucket': 'amisstea-test',
-                    'S3Key': 'rhel-server-ec2-7.3-6.x86_64.raw'
-                    }}]
+        disk_container = [{
+            'Description': 'Dummy import snapshot task',
+            'Format': 'raw',
+            'UserBucket': {
+                'S3Bucket': 'dummy-bucket',
+                'S3Key': 'dummy-key'
+                }}]
 
-            res = self.driver.ex_import_snapshot(disk_container=disk_container)
-            mock_wait.assert_called_once_with(
-                    import_task_id='import-snap-fgsddbhv', timeout=1800, interval=15)
-
-            self.assertEqual(res, mock_snapshot)
+        snap = self.driver.ex_import_snapshot(disk_container=disk_container)
+        self.assertEqual(snap.id, 'snap-0ea83e8a87e138f39')
 
     def test_wait_for_import_snapshot_completion(self):
-        with patch('libcloud.compute.drivers.ec2.BaseEC2NodeDriver'
-                   '.ex_describe_import_snapshot_tasks') as mock_wait:
-
-            mock_wait.return_value.snapshotId = 'snap-097908d536557004e'
-            res = self.driver._wait_for_import_snapshot_completion(
-                    import_task_id='import-snap-fhdysyq6')
-            self.assertEqual(res.id, 'snap-097908d536557004e')
+        snap = self.driver._wait_for_import_snapshot_completion(
+                import_task_id='import-snap-fhdysyq6')
+        self.assertEqual(snap.id, 'snap-0ea83e8a87e138f39')
 
     def test_timeout_wait_for_import_snapshot_completion(self):
         import_task_id = 'import-snap-fhdysyq6'
-        with patch('libcloud.compute.drivers.ec2.BaseEC2NodeDriver'
-                   '.ex_describe_import_snapshot_tasks') as mock_wait:
-            with self.assertRaises(Exception) as context:
-                mock_wait.return_value.snapshotId = None
-                self.driver._wait_for_import_snapshot_completion(
-                    import_task_id=import_task_id, timeout=0.01, interval=0.001)
-            self.assertTrue('Timeout while waiting for '
-                            'import task Id %s'
-                            % import_task_id in context.exception)
+        EC2MockHttp.type = 'timeout'
+        with self.assertRaises(Exception) as context:
+            self.driver._wait_for_import_snapshot_completion(
+                import_task_id=import_task_id, timeout=0.01, interval=0.001)
+        self.assertEqual('Timeout while waiting for import task Id %s'
+                         % import_task_id, context.exception.message)
 
     def test_ex_describe_import_snapshot_tasks(self):
-        res = self.driver.ex_describe_import_snapshot_tasks(
+        snap = self.driver.ex_describe_import_snapshot_tasks(
                                     import_task_id='import-snap-fh7y6i6w<')
 
-        self.assertEqual(res.snapshotId, 'snap-0ea83e8a87e138f39')
-        self.assertEqual(res.status, 'completed')
+        self.assertEqual(snap.snapshotId, 'snap-0ea83e8a87e138f39')
+        self.assertEqual(snap.status, 'completed')
 
     def test_ex_list_availability_zones(self):
         availability_zones = self.driver.ex_list_availability_zones()
@@ -1313,6 +1297,10 @@ class EC2MockHttp(MockHttpTestCase):
 
     def _DescribeImportSnapshotTasks(self, method, url, body, headers):
         body = self.fixtures.load('describe_import_snapshot_tasks.xml')
+        return (httplib.OK, body, {}, httplib.responses[httplib.OK])
+
+    def _timeout_DescribeImportSnapshotTasks(self, method, url, body, headers):
+        body = self.fixtures.load('describe_import_snapshot_tasks_active.xml')
         return (httplib.OK, body, {}, httplib.responses[httplib.OK])
 
     def _ex_imageids_DescribeImages(self, method, url, body, headers):
