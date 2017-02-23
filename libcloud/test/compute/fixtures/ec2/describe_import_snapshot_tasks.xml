@@ -1,11 +1,18 @@
 <DescribeImportSnapshotTasksResponse xmlns="http://ec2.amazonaws.com/doc/2016-11-15/">
-    <requestId>d83d751f-ccaf-4655-a837-87694f6813bd</requestId>
+    <requestId>a8c44ac4-8e63-46e9-b8b2-8c72ce3d9b18</requestId>
     <importSnapshotTaskSet>
         <item>
-	    <snapshotTaskDetail>
-		<snapshotId>snap-097908d536557004e</snapshotId>
-		<status>completed</status>
-	    </snapshotTaskDetail>
-    	</item>
+            <importTaskId>import-snap-fh7y6i6w</importTaskId>
+            <snapshotTaskDetail>
+                <snapshotId>snap-0ea83e8a87e138f39</snapshotId>
+                <format>RAW</format>
+                <diskImageSize>1.073741824E10</diskImageSize>
+                <userBucket>
+                    <s3Bucket>amisstea-test</s3Bucket>
+                    <s3Key>rhel-server-ec2-7.3-6.x86_64.raw</s3Key>
+                </userBucket>
+                <status>completed</status>
+            </snapshotTaskDetail>
+        </item>
     </importSnapshotTaskSet>
 </DescribeImportSnapshotTasksResponse>

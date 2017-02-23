@@ -19,6 +19,7 @@ import os
 import sys
 import pdb
 from datetime import datetime
+from mock import patch, Mock
 from libcloud.utils.iso8601 import UTC
 
 from libcloud.utils.py3 import httplib
@@ -564,25 +565,42 @@ class EC2Tests(LibcloudTestCase, TestCaseMixin):
                                               ena_support=True)
         self.assertEqual(image.id, 'ami-57c2fb3e')
 
-    """
     def test_ex_import_snapshot(self):
-        disk_container = [{'Description': 'amisstea-test2',
-                  'Format': 'raw',
-                  'UserBucket': {
+        with patch('libcloud.compute.drivers.ec2.BaseEC2NodeDriver._wait_for'
+                   '_import_snapshot_completion') as mock_wait:
+            mock_snapshot = Mock()
+            mock_snapshot.id = 'snap-097908d536557004e'
+            mock_wait.return_value = mock_snapshot
+            disk_container = [{
+                'Description': 'amisstea-test2',
+                'Format': 'raw',
+                'UserBucket': {
                     'S3Bucket': 'amisstea-test',
                     'S3Key': 'rhel-server-ec2-7.3-6.x86_64.raw'
-                  }}]
-    
-        importSnapshot = self.driver.ex_import_snapshot(disk_container=disk_container)
-        
-        self.assertEqual(importSnapshot.importTaskId, 'import-snap-fgsddbhv')
-    
-    """
+                    }}]
+
+            res = self.driver.ex_import_snapshot(disk_container=disk_container)
+            mock_wait.assert_called_once_with(
+                    'import-snap-fgsddbhv', timeout=1800)
+
+            self.assertEqual(res, mock_snapshot)
+
+    def test_wait_for_import_snapshot_completion(self):
+        with patch('libcloud.compute.drivers.ec2.BaseEC2NodeDriver'
+                   '.ex_describe_import_snapshot_tasks') as mock_wait:
+
+            mock_wait.return_value.snapshotId = 'snap-097908d536557004e'
+            res = self.driver._wait_for_import_snapshot_completion(
+                    import_task_id='import-snap-fhdysyq6')
+
+            self.assertEqual(res.id, 'snap-097908d536557004e')
+
     def test_ex_describe_import_snapshot_tasks(self):
         res = self.driver.ex_describe_import_snapshot_tasks(
-                                    import_task_id='import-snap-fhdysyq6')
-        
-        self.assertEqual(res.snapshotId, 'snap-097908d536557004e')
+                                    import_task_id='import-snap-fh7y6i6w<')
+
+        self.assertEqual(res.snapshotId, 'snap-0ea83e8a87e138f39')
+        self.assertEqual(res.status, 'completed')
 
     def test_ex_list_availability_zones(self):
         availability_zones = self.driver.ex_list_availability_zones()
@@ -1277,16 +1295,15 @@ class EC2MockHttp(MockHttpTestCase):
     def _RegisterImages(self, method, url, body, headers):
         body = self.fixtures.load('register_image.xml')
         return (httplib.OK, body, {}, httplib.responses[httplib.OK])
-    """
+
     def _ImportSnapshot(self, method, url, body, headers):
         body = self.fixtures.load('import_snapshot.xml')
         return (httplib.OK, body, {}, httplib.responses[httplib.OK])
-    """
-    
+
     def _DescribeImportSnapshotTasks(self, method, url, body, headers):
         body = self.fixtures.load('describe_import_snapshot_tasks.xml')
         return (httplib.OK, body, {}, httplib.responses[httplib.OK])
-    
+
     def _ex_imageids_DescribeImages(self, method, url, body, headers):
         body = self.fixtures.load('describe_images_ex_imageids.xml')
         return (httplib.OK, body, {}, httplib.responses[httplib.OK])
